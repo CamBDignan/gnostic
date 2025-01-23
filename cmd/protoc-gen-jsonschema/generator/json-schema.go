@@ -367,6 +367,40 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 			)
 		}
 
+		if message.Oneofs != nil {
+			if schema.Value.AllOf == nil {
+				schema.Value.AllOf = &[]*jsonschema.Schema{}
+			}
+
+			for _, oneOfProto := range message.Oneofs {
+				anyOfSchema := jsonschema.Schema{
+					AnyOf: &[]*jsonschema.Schema{},
+				}
+				*schema.Value.AllOf = append(*schema.Value.AllOf, &anyOfSchema)
+
+				oneOfSchema := jsonschema.Schema{
+					OneOf: &[]*jsonschema.Schema{},
+				}
+				notSchema := jsonschema.Schema{
+					Not: &jsonschema.Schema{
+						Required: &[]string{},
+					},
+				}
+				*anyOfSchema.AnyOf = append(*anyOfSchema.AnyOf, &oneOfSchema, &notSchema)
+
+				for _, fieldProto := range oneOfProto.Fields {
+					fieldName := g.formatFieldName(fieldProto)
+					*oneOfSchema.OneOf = append(
+						*oneOfSchema.OneOf,
+						&jsonschema.Schema{
+							Required: &[]string{fieldName},
+						},
+					)
+					*notSchema.Not.Required = append(*notSchema.Not.Required, fieldName)
+				}
+			}
+		}
+
 		schemas = append(schemas, schema)
 	}
 
