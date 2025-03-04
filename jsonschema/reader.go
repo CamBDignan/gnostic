@@ -143,7 +143,7 @@ func NewSchemaFromObject(jsonData *yaml.Node) *Schema {
 				schema.Description = schema.stringValue(v)
 
 			case "default":
-				schema.Default = v
+				schema.Default = schema.defaultValue(v)
 
 			case "format":
 				schema.Format = schema.stringValue(v)
@@ -244,6 +244,28 @@ func (schema *Schema) boolValue(v *yaml.Node) *bool {
 		}
 	default:
 		fmt.Printf("boolValue: unexpected node %+v\n", v)
+	}
+	return nil
+}
+
+func (schema *Schema) defaultValue(v *yaml.Node) *DefaultValue {
+	switch v.Kind {
+	case yaml.ScalarNode:
+		switch v.Tag {
+		case "!!float":
+			v2, _ := strconv.ParseFloat(v.Value, 64)
+			return &DefaultValue{Float64Value: &v2}
+		case "!!int":
+			v2, _ := strconv.ParseInt(v.Value, 10, 64)
+			return &DefaultValue{Int64Value: &v2}
+		case "!!bool":
+			v2, _ := strconv.ParseBool(v.Value)
+			return &DefaultValue{BooleanValue: &v2}
+		default:
+			return &DefaultValue{StringValue: &v.Value}
+		}
+	default:
+		fmt.Printf("defaultValue: unexpected node %+v\n", v)
 	}
 	return nil
 }

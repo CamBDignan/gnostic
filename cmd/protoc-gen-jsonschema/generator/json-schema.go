@@ -41,6 +41,11 @@ var (
 	formatDateTime = "date-time"
 	formatEnum     = "enum"
 	formatBytes    = "bytes"
+
+	emptyString  = ""
+	emptyInt64   = int64(0)
+	emptyFloat64 = 0.0
+	emptyBoolean = false
 )
 
 func init() {
@@ -110,6 +115,23 @@ func (g *JSONSchemaGenerator) formatMessageNameString(name string) string {
 
 	if len(name) > 1 {
 		return strings.ToUpper(name[0:1]) + name[1:]
+	}
+
+	if len(name) == 1 {
+		return strings.ToLower(name)
+	}
+
+	return name
+}
+
+func (g *JSONSchemaGenerator) formatOneofFieldName(oneof *protogen.Oneof) string {
+	if *g.conf.Naming == "proto" {
+		return string(oneof.Desc.Name())
+	}
+
+	name := oneof.GoName
+	if len(name) > 1 {
+		return strings.ToLower(name[0:1]) + name[1:]
 	}
 
 	if len(name) == 1 {
@@ -213,14 +235,14 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 		}
 
 	case protoreflect.StringKind:
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeString}}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeString}, Default: &jsonschema.DefaultValue{StringValue: &emptyString}}
 
 	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Uint32Kind,
 		protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Uint64Kind,
 		protoreflect.Sfixed32Kind, protoreflect.Fixed32Kind, protoreflect.Sfixed64Kind,
 		protoreflect.Fixed64Kind:
 		format := kind.String()
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeInteger}, Format: &format}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeInteger}, Format: &format, Default: &jsonschema.DefaultValue{Int64Value: &emptyInt64}}
 
 	case protoreflect.EnumKind:
 		kindSchema = &jsonschema.Schema{Format: &formatEnum}
@@ -236,14 +258,14 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 		}
 
 	case protoreflect.BoolKind:
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeBoolean}}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeBoolean}, Default: &jsonschema.DefaultValue{BooleanValue: &emptyBoolean}}
 
 	case protoreflect.FloatKind, protoreflect.DoubleKind:
 		format := kind.String()
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeNumber}, Format: &format}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeNumber}, Format: &format, Default: &jsonschema.DefaultValue{Float64Value: &emptyFloat64}}
 
 	case protoreflect.BytesKind:
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeString}, Format: &formatBytes}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeString}, Format: &formatBytes, Default: &jsonschema.DefaultValue{StringValue: &emptyString}}
 
 	default:
 		log.Printf("(TODO) Unsupported field type: %+v", field.Message().FullName())
@@ -265,6 +287,7 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 // buildSchemasFromMessages creates a schema for each message.
 func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Message) []*jsonschema.NamedSchema {
 	schemas := []*jsonschema.NamedSchema{}
+	unspecifiedSchemaCreated := false
 
 	// For each message, generate a schema.
 	for _, message := range messages {
@@ -317,7 +340,65 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 			continue
 		}
 
+		if message.Oneofs != nil {
+			for _, oneOfProto := range message.Oneofs {
+				oneOfSchema := jsonschema.Schema{
+					OneOf: &[]*jsonschema.Schema{},
+				}
+
+				refUnspecified := "TypeUnspecified.json"
+				if !unspecifiedSchemaCreated {
+					unspecifiedSchema := &jsonschema.NamedSchema{
+						Name: refUnspecified,
+						Value: &jsonschema.Schema{
+							Type:       &jsonschema.StringOrStringArray{String: &typeObject},
+							Title:      &refUnspecified,
+							Properties: &[]*jsonschema.NamedSchema{},
+						},
+					}
+					unspecified := "unspecified"
+					typeOfObjectProperty := &jsonschema.NamedSchema{
+						Name: "typeOfObject",
+						Value: &jsonschema.Schema{
+							Type:        &jsonschema.StringOrStringArray{String: &typeString},
+							Enumeration: &[]jsonschema.SchemaEnumValue{},
+							Default:     &jsonschema.DefaultValue{StringValue: &unspecified},
+						},
+					}
+					*typeOfObjectProperty.Value.Enumeration = append(
+						*typeOfObjectProperty.Value.Enumeration,
+						jsonschema.SchemaEnumValue{String: &unspecified},
+					)
+					*unspecifiedSchema.Value.Properties = append(
+						*unspecifiedSchema.Value.Properties,
+						typeOfObjectProperty,
+					)
+					schemas = append(schemas, unspecifiedSchema)
+					unspecifiedSchemaCreated = true
+				}
+				*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &refUnspecified})
+
+				for _, fieldProto := range oneOfProto.Fields {
+					ref := "Type" + fieldProto.GoName + ".json"
+					// TODO: create schema
+					*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &ref})
+				}
+
+				*schema.Value.Properties = append(
+					*schema.Value.Properties,
+					&jsonschema.NamedSchema{
+						Name:  g.formatOneofFieldName(oneOfProto),
+						Value: &oneOfSchema,
+					},
+				)
+			}
+		}
+
 		for _, field := range message.Fields {
+			if field.Oneof != nil {
+				continue
+			}
+
 			// The field is either described by a reference or a schema.
 			fieldSchema := g.schemaOrReferenceForField(field.Desc, schema.Value.Definitions)
 			if fieldSchema == nil {
@@ -365,40 +446,6 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 					Value: fieldSchema,
 				},
 			)
-		}
-
-		if message.Oneofs != nil {
-			if schema.Value.AllOf == nil {
-				schema.Value.AllOf = &[]*jsonschema.Schema{}
-			}
-
-			for _, oneOfProto := range message.Oneofs {
-				anyOfSchema := jsonschema.Schema{
-					AnyOf: &[]*jsonschema.Schema{},
-				}
-				*schema.Value.AllOf = append(*schema.Value.AllOf, &anyOfSchema)
-
-				oneOfSchema := jsonschema.Schema{
-					OneOf: &[]*jsonschema.Schema{},
-				}
-				notSchema := jsonschema.Schema{
-					Not: &jsonschema.Schema{
-						Required: &[]string{},
-					},
-				}
-				*anyOfSchema.AnyOf = append(*anyOfSchema.AnyOf, &oneOfSchema, &notSchema)
-
-				for _, fieldProto := range oneOfProto.Fields {
-					fieldName := g.formatFieldName(fieldProto)
-					*oneOfSchema.OneOf = append(
-						*oneOfSchema.OneOf,
-						&jsonschema.Schema{
-							Required: &[]string{fieldName},
-						},
-					)
-					*notSchema.Not.Required = append(*notSchema.Not.Required, fieldName)
-				}
-			}
 		}
 
 		schemas = append(schemas, schema)
