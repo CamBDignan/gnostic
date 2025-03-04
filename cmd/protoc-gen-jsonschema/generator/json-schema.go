@@ -292,11 +292,6 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 				subSchema.Value.Schema = nil
 				subSchema.Name = messageDefinitionName(subMessage.Desc)
 
-				//if subSchema.Value.Definitions != nil {
-				//	*schema.Value.Definitions = append(*schema.Value.Definitions, *subSchema.Value.Definitions...)
-				//	subSchema.Value.Definitions = nil
-				//}
-
 				schemas = append(schemas, subSchemas...)
 			}
 		}
