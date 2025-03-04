@@ -228,7 +228,7 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForType(desc protoreflect.Message
 	}
 
 	typeName = messageDefinitionName(desc)
-	ref := "#/definitions/" + g.formatMessageNameString(typeName)
+	ref := g.formatMessageNameString(typeName) + ".json"
 	return &jsonschema.Schema{Ref: &ref}
 }
 
@@ -253,14 +253,6 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 		kindSchema = g.schemaOrReferenceForType(field.Message())
 		if kindSchema == nil {
 			return nil
-		}
-
-		if kindSchema.Ref != nil {
-			if !refInDefinitions(*kindSchema.Ref, definitions) {
-				ref := strings.Replace(*kindSchema.Ref, "#/definitions/", *g.conf.BaseURL, 1)
-				ref += ".json"
-				kindSchema.Ref = &ref
-			}
 		}
 
 	case protoreflect.StringKind:
@@ -386,12 +378,8 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 			schema.Value.Description = &description
 		}
 
-		// Any embedded messages will be created as definitions
+		// Any embedded messages will be created as new schemas
 		if message.Messages != nil {
-			if schema.Value.Definitions == nil {
-				schema.Value.Definitions = &[]*jsonschema.NamedSchema{}
-			}
-
 			for _, subMessage := range message.Messages {
 				subSchemas := g.buildSchemasFromMessages([]*protogen.Message{subMessage})
 				if len(subSchemas) != 1 {
@@ -402,12 +390,12 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 				subSchema.Value.Schema = nil
 				subSchema.Name = messageDefinitionName(subMessage.Desc)
 
-				if subSchema.Value.Definitions != nil {
-					*schema.Value.Definitions = append(*schema.Value.Definitions, *subSchema.Value.Definitions...)
-					subSchema.Value.Definitions = nil
-				}
+				//if subSchema.Value.Definitions != nil {
+				//	*schema.Value.Definitions = append(*schema.Value.Definitions, *subSchema.Value.Definitions...)
+				//	subSchema.Value.Definitions = nil
+				//}
 
-				*schema.Value.Definitions = append(*schema.Value.Definitions, subSchemas...)
+				schemas = append(schemas, subSchemas...)
 			}
 		}
 
@@ -508,17 +496,4 @@ func getSchemaVersion(schema *jsonschema.Schema) string {
 		return matches[1]
 	}
 	return ""
-}
-
-func refInDefinitions(ref string, definitions *[]*jsonschema.NamedSchema) bool {
-	if definitions == nil {
-		return false
-	}
-	ref = strings.TrimPrefix(ref, "#/definitions/")
-	for _, def := range *definitions {
-		if ref == def.Name {
-			return true
-		}
-	}
-	return false
 }
