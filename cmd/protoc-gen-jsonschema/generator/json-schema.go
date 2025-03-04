@@ -41,6 +41,11 @@ var (
 	formatDateTime = "date-time"
 	formatEnum     = "enum"
 	formatBytes    = "bytes"
+
+	emptyString  = ""
+	emptyInt64   = int64(0)
+	emptyFloat64 = 0.0
+	emptyBoolean = false
 )
 
 func init() {
@@ -205,14 +210,14 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 		}
 
 	case protoreflect.StringKind:
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeString}}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeString}, Default: &jsonschema.DefaultValue{StringValue: &emptyString}}
 
 	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Uint32Kind,
 		protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Uint64Kind,
 		protoreflect.Sfixed32Kind, protoreflect.Fixed32Kind, protoreflect.Sfixed64Kind,
 		protoreflect.Fixed64Kind:
 		format := kind.String()
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeInteger}, Format: &format}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeInteger}, Format: &format, Default: &jsonschema.DefaultValue{Int64Value: &emptyInt64}}
 
 	case protoreflect.EnumKind:
 		kindSchema = &jsonschema.Schema{Format: &formatEnum}
@@ -228,14 +233,14 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 		}
 
 	case protoreflect.BoolKind:
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeBoolean}}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeBoolean}, Default: &jsonschema.DefaultValue{BooleanValue: &emptyBoolean}}
 
 	case protoreflect.FloatKind, protoreflect.DoubleKind:
 		format := kind.String()
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeNumber}, Format: &format}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeNumber}, Format: &format, Default: &jsonschema.DefaultValue{Float64Value: &emptyFloat64}}
 
 	case protoreflect.BytesKind:
-		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeString}, Format: &formatBytes}
+		kindSchema = &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeString}, Format: &formatBytes, Default: &jsonschema.DefaultValue{StringValue: &emptyString}}
 
 	default:
 		log.Printf("(TODO) Unsupported field type: %+v", field.Message().FullName())

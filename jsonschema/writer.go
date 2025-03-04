@@ -34,7 +34,7 @@ func renderMappingNode(node *yaml.Node, indent string) (result string) {
 		value := node.Content[i+1]
 		switch value.Kind {
 		case yaml.ScalarNode:
-			if value.Tag == "!!bool" {
+			if value.Tag == "!!bool" || value.Tag == "!!int" || value.Tag == "!!float" {
 				result += value.Value
 			} else {
 				result += "\"" + value.Value + "\""
@@ -377,7 +377,15 @@ func (schema *Schema) nodeValue() *yaml.Node {
 		content = appendPair(content, "definitions", nodeForNamedSchemaArray(schema.Definitions))
 	}
 	if schema.Default != nil {
-		// m = append(m, yaml.MapItem{Key: "default", Value: *schema.Default})
+		if schema.Default.StringValue != nil {
+			content = appendPair(content, "default", nodeForString(*schema.Default.StringValue))
+		} else if schema.Default.BooleanValue != nil {
+			content = appendPair(content, "default", nodeForBoolean(*schema.Default.BooleanValue))
+		} else if schema.Default.Int64Value != nil {
+			content = appendPair(content, "default", nodeForInt64(*schema.Default.Int64Value))
+		} else if schema.Default.Float64Value != nil {
+			content = appendPair(content, "default", nodeForFloat64(*schema.Default.Float64Value))
+		}
 	}
 	if schema.Format != nil {
 		content = appendPair(content, "format", nodeForString(*schema.Format))
