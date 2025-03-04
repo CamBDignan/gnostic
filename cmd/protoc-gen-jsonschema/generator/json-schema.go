@@ -284,6 +284,53 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 	return kindSchema
 }
 
+func (g *JSONSchemaGenerator) namedSchemaForField(field *protogen.Field, schema *jsonschema.NamedSchema) *jsonschema.NamedSchema {
+	// The field is either described by a reference or a schema.
+	fieldSchema := g.schemaOrReferenceForField(field.Desc, schema.Value.Definitions)
+	if fieldSchema == nil {
+		return nil
+	}
+
+	// Handle readonly and writeonly properties, if the schema version can handle it.
+	if getSchemaVersion(schema.Value) >= "07" {
+		t := true
+		// Check the field annotations to see if this is a readonly field.
+		extension := proto.GetExtension(field.Desc.Options(), annotations.E_FieldBehavior)
+		if extension != nil {
+			switch v := extension.(type) {
+			case []annotations.FieldBehavior:
+				for _, vv := range v {
+					if vv == annotations.FieldBehavior_OUTPUT_ONLY {
+						fieldSchema.ReadOnly = &t
+					} else if vv == annotations.FieldBehavior_INPUT_ONLY {
+						fieldSchema.WriteOnly = &t
+					}
+				}
+			default:
+				log.Printf("unsupported extension type %T", extension)
+			}
+		}
+	}
+
+	fieldName := g.formatFieldName(field)
+	// Do not add title for ref values
+	if fieldSchema.Ref == nil {
+		fieldSchema.Title = &fieldName
+	}
+
+	// Get the field description from the comments.
+	description := g.filterCommentString(field.Comments.Leading, true)
+	if description != "" {
+		// Note: Description will be ignored if $ref is set, but is still useful
+		fieldSchema.Description = &description
+	}
+
+	return &jsonschema.NamedSchema{
+		Name:  fieldName,
+		Value: fieldSchema,
+	}
+}
+
 // buildSchemasFromMessages creates a schema for each message.
 func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Message) []*jsonschema.NamedSchema {
 	schemas := []*jsonschema.NamedSchema{}
@@ -379,9 +426,46 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 				*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &refUnspecified})
 
 				for _, fieldProto := range oneOfProto.Fields {
-					ref := "Type" + fieldProto.GoName + ".json"
-					// TODO: create schema
-					*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &ref})
+					ref := schemaName + "_" + fieldProto.GoName
+					oneofFieldSchema := &jsonschema.NamedSchema{
+						Name: ref,
+						Value: &jsonschema.Schema{
+							Type:       &jsonschema.StringOrStringArray{String: &typeObject},
+							Title:      &ref,
+							Properties: &[]*jsonschema.NamedSchema{},
+						},
+					}
+					enumValue := string(fieldProto.Desc.Name())
+					typeOfObjectProperty := &jsonschema.NamedSchema{
+						Name: "typeOfObject",
+						Value: &jsonschema.Schema{
+							Type:        &jsonschema.StringOrStringArray{String: &typeString},
+							Enumeration: &[]jsonschema.SchemaEnumValue{},
+							Default:     &jsonschema.DefaultValue{StringValue: &enumValue},
+						},
+					}
+					*typeOfObjectProperty.Value.Enumeration = append(
+						*typeOfObjectProperty.Value.Enumeration,
+						jsonschema.SchemaEnumValue{String: &enumValue},
+					)
+					actualProperty := g.namedSchemaForField(fieldProto, schema)
+					if actualProperty == nil {
+						continue
+					}
+
+					*oneofFieldSchema.Value.Properties = append(
+						*oneofFieldSchema.Value.Properties,
+						typeOfObjectProperty,
+						actualProperty,
+					)
+
+					if schema.Value.Definitions == nil {
+						schema.Value.Definitions = &[]*jsonschema.NamedSchema{}
+					}
+					*schema.Value.Definitions = append(*schema.Value.Definitions, oneofFieldSchema)
+
+					definitionsRef := "#/definitions/" + ref
+					*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &definitionsRef})
 				}
 
 				*schema.Value.Properties = append(
@@ -399,52 +483,14 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 				continue
 			}
 
-			// The field is either described by a reference or a schema.
-			fieldSchema := g.schemaOrReferenceForField(field.Desc, schema.Value.Definitions)
-			if fieldSchema == nil {
+			namedSchema := g.namedSchemaForField(field, schema)
+			if namedSchema == nil {
 				continue
-			}
-
-			// Handle readonly and writeonly properties, if the schema version can handle it.
-			if getSchemaVersion(schema.Value) >= "07" {
-				t := true
-				// Check the field annotations to see if this is a readonly field.
-				extension := proto.GetExtension(field.Desc.Options(), annotations.E_FieldBehavior)
-				if extension != nil {
-					switch v := extension.(type) {
-					case []annotations.FieldBehavior:
-						for _, vv := range v {
-							if vv == annotations.FieldBehavior_OUTPUT_ONLY {
-								fieldSchema.ReadOnly = &t
-							} else if vv == annotations.FieldBehavior_INPUT_ONLY {
-								fieldSchema.WriteOnly = &t
-							}
-						}
-					default:
-						log.Printf("unsupported extension type %T", extension)
-					}
-				}
-			}
-
-			fieldName := g.formatFieldName(field)
-			// Do not add title for ref values
-			if fieldSchema.Ref == nil {
-				fieldSchema.Title = &fieldName
-			}
-
-			// Get the field description from the comments.
-			description := g.filterCommentString(field.Comments.Leading, true)
-			if description != "" {
-				// Note: Description will be ignored if $ref is set, but is still useful
-				fieldSchema.Description = &description
 			}
 
 			*schema.Value.Properties = append(
 				*schema.Value.Properties,
-				&jsonschema.NamedSchema{
-					Name:  fieldName,
-					Value: fieldSchema,
-				},
+				namedSchema,
 			)
 		}
 
