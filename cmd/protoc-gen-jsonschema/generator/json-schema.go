@@ -95,6 +95,35 @@ func (g *JSONSchemaGenerator) Run() error {
 		}
 	}
 
+	refUnspecified := "TypeUnspecified"
+	unspecifiedSchema := &jsonschema.NamedSchema{
+		Name: refUnspecified,
+		Value: &jsonschema.Schema{
+			Type:       &jsonschema.StringOrStringArray{String: &typeObject},
+			Title:      &refUnspecified,
+			Properties: &[]*jsonschema.NamedSchema{},
+		},
+	}
+	unspecified := "unspecified"
+	typeOfObjectProperty := &jsonschema.NamedSchema{
+		Name: "typeOfObject",
+		Value: &jsonschema.Schema{
+			Type:        &jsonschema.StringOrStringArray{String: &typeString},
+			Enumeration: &[]jsonschema.SchemaEnumValue{},
+			Default:     &jsonschema.DefaultValue{StringValue: &unspecified},
+		},
+	}
+	*typeOfObjectProperty.Value.Enumeration = append(
+		*typeOfObjectProperty.Value.Enumeration,
+		jsonschema.SchemaEnumValue{String: &unspecified},
+	)
+	*unspecifiedSchema.Value.Properties = append(
+		*unspecifiedSchema.Value.Properties,
+		typeOfObjectProperty,
+	)
+	outputFile := g.plugin.NewGeneratedFile(fmt.Sprintf("%s.json", unspecifiedSchema.Name), "")
+	outputFile.Write([]byte(unspecifiedSchema.Value.JSONString()))
+
 	return nil
 }
 
@@ -334,7 +363,6 @@ func (g *JSONSchemaGenerator) namedSchemaForField(field *protogen.Field, schema 
 // buildSchemasFromMessages creates a schema for each message.
 func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Message) []*jsonschema.NamedSchema {
 	schemas := []*jsonschema.NamedSchema{}
-	unspecifiedSchemaCreated := false
 
 	// For each message, generate a schema.
 	for _, message := range messages {
@@ -394,35 +422,6 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 				}
 
 				refUnspecified := "TypeUnspecified.json"
-				if !unspecifiedSchemaCreated {
-					unspecifiedSchema := &jsonschema.NamedSchema{
-						Name: refUnspecified,
-						Value: &jsonschema.Schema{
-							Type:       &jsonschema.StringOrStringArray{String: &typeObject},
-							Title:      &refUnspecified,
-							Properties: &[]*jsonschema.NamedSchema{},
-						},
-					}
-					unspecified := "unspecified"
-					typeOfObjectProperty := &jsonschema.NamedSchema{
-						Name: "typeOfObject",
-						Value: &jsonschema.Schema{
-							Type:        &jsonschema.StringOrStringArray{String: &typeString},
-							Enumeration: &[]jsonschema.SchemaEnumValue{},
-							Default:     &jsonschema.DefaultValue{StringValue: &unspecified},
-						},
-					}
-					*typeOfObjectProperty.Value.Enumeration = append(
-						*typeOfObjectProperty.Value.Enumeration,
-						jsonschema.SchemaEnumValue{String: &unspecified},
-					)
-					*unspecifiedSchema.Value.Properties = append(
-						*unspecifiedSchema.Value.Properties,
-						typeOfObjectProperty,
-					)
-					schemas = append(schemas, unspecifiedSchema)
-					unspecifiedSchemaCreated = true
-				}
 				*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &refUnspecified})
 
 				for _, fieldProto := range oneOfProto.Fields {
