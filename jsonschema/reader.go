@@ -264,6 +264,8 @@ func (schema *Schema) defaultValue(v *yaml.Node) *DefaultValue {
 		default:
 			return &DefaultValue{StringValue: &v.Value}
 		}
+	case yaml.SequenceNode:
+		return &DefaultValue{ArrayValue: v.Content}
 	default:
 		fmt.Printf("defaultValue: unexpected node %+v\n", v)
 	}
