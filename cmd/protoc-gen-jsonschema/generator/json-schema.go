@@ -388,21 +388,13 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 
 	// For each message, generate a schema.
 	for _, message := range messages {
-		schemaName := string(message.Desc.Name())
+		schemaName := messageDefinitionName(message.Desc)
 		schema := g.setupSchemaForMessage(schemaName, message.Comments.Leading)
 
 		// Any embedded messages will be created as new schemas
 		if message.Messages != nil {
 			for _, subMessage := range message.Messages {
 				subSchemas := g.buildSchemasFromMessages([]*protogen.Message{subMessage})
-				if len(subSchemas) != 1 {
-					continue
-				}
-				subSchema := subSchemas[0]
-				subSchema.Value.ID = nil
-				subSchema.Value.Schema = nil
-				subSchema.Name = messageDefinitionName(subMessage.Desc)
-
 				schemas = append(schemas, subSchemas...)
 			}
 		}
