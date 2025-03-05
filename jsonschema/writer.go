@@ -385,6 +385,8 @@ func (schema *Schema) nodeValue() *yaml.Node {
 			content = appendPair(content, "default", nodeForInt64(*schema.Default.Int64Value))
 		} else if schema.Default.Float64Value != nil {
 			content = appendPair(content, "default", nodeForFloat64(*schema.Default.Float64Value))
+		} else if schema.Default.ArrayValue != nil {
+			content = appendPair(content, "default", nodeForSequence(schema.Default.ArrayValue))
 		}
 	}
 	if schema.Format != nil {

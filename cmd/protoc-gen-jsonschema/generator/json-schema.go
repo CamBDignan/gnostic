@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"gopkg.in/yaml.v3"
 
 	"github.com/google/gnostic/jsonschema"
 )
@@ -46,6 +47,7 @@ var (
 	emptyInt64   = int64(0)
 	emptyFloat64 = 0.0
 	emptyBoolean = false
+	emptyArray   = []*yaml.Node{}
 )
 
 func init() {
@@ -227,9 +229,13 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 			for i := 0; i < field.Enum().Values().Len(); i++ {
 				name := string(field.Enum().Values().Get(i).Name())
 				*kindSchema.Enumeration = append(*kindSchema.Enumeration, jsonschema.SchemaEnumValue{String: &name})
+				if i == 0 {
+					kindSchema.Default = &jsonschema.DefaultValue{StringValue: &emptyString}
+				}
 			}
 		} else {
 			kindSchema.Type = &jsonschema.StringOrStringArray{String: &typeInteger}
+			kindSchema.Default = &jsonschema.DefaultValue{Int64Value: &emptyInt64}
 		}
 
 	case protoreflect.BoolKind:
@@ -253,6 +259,7 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 			Items: &jsonschema.SchemaOrSchemaArray{
 				Schema: kindSchema,
 			},
+			Default: &jsonschema.DefaultValue{ArrayValue: emptyArray},
 		}
 	}
 
