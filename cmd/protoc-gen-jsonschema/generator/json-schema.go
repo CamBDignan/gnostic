@@ -97,36 +97,20 @@ func (g *JSONSchemaGenerator) Run() error {
 		}
 	}
 
-	refUnspecified := "TypeUnspecified"
-	unspecifiedSchema := &jsonschema.NamedSchema{
-		Name: refUnspecified,
-		Value: &jsonschema.Schema{
-			Type:       &jsonschema.StringOrStringArray{String: &typeObject},
-			Title:      &refUnspecified,
-			Properties: &[]*jsonschema.NamedSchema{},
-		},
-	}
-	unspecified := "unspecified"
-	typeOfObjectProperty := &jsonschema.NamedSchema{
-		Name: "typeOfObject",
-		Value: &jsonschema.Schema{
-			Type:        &jsonschema.StringOrStringArray{String: &typeString},
-			Enumeration: &[]jsonschema.SchemaEnumValue{},
-			Default:     &jsonschema.DefaultValue{StringValue: &unspecified},
-		},
-	}
-	*typeOfObjectProperty.Value.Enumeration = append(
-		*typeOfObjectProperty.Value.Enumeration,
-		jsonschema.SchemaEnumValue{String: &unspecified},
-	)
+	g.generateTypeUnspecified()
+
+	return nil
+}
+
+func (g *JSONSchemaGenerator) generateTypeUnspecified() {
+	unspecifiedSchema := g.setupSchemaForMessage("TypeUnspecified", "")
+	typeOfObjectProperty := g.buildTypeOfObjectProperty("unspecified")
 	*unspecifiedSchema.Value.Properties = append(
 		*unspecifiedSchema.Value.Properties,
 		typeOfObjectProperty,
 	)
 	outputFile := g.plugin.NewGeneratedFile(fmt.Sprintf("%s.json", unspecifiedSchema.Name), "")
 	outputFile.Write([]byte(unspecifiedSchema.Value.JSONString()))
-
-	return nil
 }
 
 // filterCommentString removes line breaks and linter rules from comments.
@@ -359,6 +343,45 @@ func (g *JSONSchemaGenerator) namedSchemaForField(field *protogen.Field, schema 
 	}
 }
 
+func (g *JSONSchemaGenerator) setupSchemaForMessage(schemaName string, comments protogen.Comments) *jsonschema.NamedSchema {
+	typ := "object"
+	id := fmt.Sprintf("%s%s.json", *g.conf.BaseURL, schemaName)
+
+	schema := &jsonschema.NamedSchema{
+		Name: schemaName,
+		Value: &jsonschema.Schema{
+			Schema:     g.conf.Version,
+			ID:         &id,
+			Type:       &jsonschema.StringOrStringArray{String: &typ},
+			Title:      &schemaName,
+			Properties: &[]*jsonschema.NamedSchema{},
+		},
+	}
+
+	description := g.filterCommentString(comments, true)
+	if description != "" {
+		schema.Value.Description = &description
+	}
+
+	return schema
+}
+
+func (g *JSONSchemaGenerator) buildTypeOfObjectProperty(propertyValue string) *jsonschema.NamedSchema {
+	typeOfObjectProperty := &jsonschema.NamedSchema{
+		Name: "typeOfObject",
+		Value: &jsonschema.Schema{
+			Type:        &jsonschema.StringOrStringArray{String: &typeString},
+			Enumeration: &[]jsonschema.SchemaEnumValue{},
+			Default:     &jsonschema.DefaultValue{StringValue: &propertyValue},
+		},
+	}
+	*typeOfObjectProperty.Value.Enumeration = append(
+		*typeOfObjectProperty.Value.Enumeration,
+		jsonschema.SchemaEnumValue{String: &propertyValue},
+	)
+	return typeOfObjectProperty
+}
+
 // buildSchemasFromMessages creates a schema for each message.
 func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Message) []*jsonschema.NamedSchema {
 	schemas := []*jsonschema.NamedSchema{}
@@ -366,24 +389,7 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 	// For each message, generate a schema.
 	for _, message := range messages {
 		schemaName := string(message.Desc.Name())
-		typ := "object"
-		id := fmt.Sprintf("%s%s.json", *g.conf.BaseURL, schemaName)
-
-		schema := &jsonschema.NamedSchema{
-			Name: schemaName,
-			Value: &jsonschema.Schema{
-				Schema:     g.conf.Version,
-				ID:         &id,
-				Type:       &jsonschema.StringOrStringArray{String: &typ},
-				Title:      &schemaName,
-				Properties: &[]*jsonschema.NamedSchema{},
-			},
-		}
-
-		description := g.filterCommentString(message.Comments.Leading, true)
-		if description != "" {
-			schema.Value.Description = &description
-		}
+		schema := g.setupSchemaForMessage(schemaName, message.Comments.Leading)
 
 		// Any embedded messages will be created as new schemas
 		if message.Messages != nil {
@@ -424,19 +430,7 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 							Properties: &[]*jsonschema.NamedSchema{},
 						},
 					}
-					enumValue := string(fieldProto.Desc.Name())
-					typeOfObjectProperty := &jsonschema.NamedSchema{
-						Name: "typeOfObject",
-						Value: &jsonschema.Schema{
-							Type:        &jsonschema.StringOrStringArray{String: &typeString},
-							Enumeration: &[]jsonschema.SchemaEnumValue{},
-							Default:     &jsonschema.DefaultValue{StringValue: &enumValue},
-						},
-					}
-					*typeOfObjectProperty.Value.Enumeration = append(
-						*typeOfObjectProperty.Value.Enumeration,
-						jsonschema.SchemaEnumValue{String: &enumValue},
-					)
+					typeOfObjectProperty := g.buildTypeOfObjectProperty(string(fieldProto.Desc.Name()))
 					actualProperty := g.namedSchemaForField(fieldProto, schema)
 					if actualProperty == nil {
 						continue
