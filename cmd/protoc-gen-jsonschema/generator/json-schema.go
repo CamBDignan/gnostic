@@ -382,6 +382,60 @@ func (g *JSONSchemaGenerator) buildTypeOfObjectProperty(propertyValue string) *j
 	return typeOfObjectProperty
 }
 
+func (g *JSONSchemaGenerator) addOneofFieldsToSchema(oneofs []*protogen.Oneof, schema *jsonschema.NamedSchema) {
+	if oneofs == nil {
+		return
+	}
+
+	for _, oneOfProto := range oneofs {
+		oneOfSchema := jsonschema.Schema{
+			OneOf: &[]*jsonschema.Schema{},
+		}
+
+		refUnspecified := "TypeUnspecified.json"
+		*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &refUnspecified})
+
+		for _, fieldProto := range oneOfProto.Fields {
+			ref := schema.Name + "_" + fieldProto.GoName
+			oneofFieldSchema := &jsonschema.NamedSchema{
+				Name: ref,
+				Value: &jsonschema.Schema{
+					Type:       &jsonschema.StringOrStringArray{String: &typeObject},
+					Title:      &ref,
+					Properties: &[]*jsonschema.NamedSchema{},
+				},
+			}
+			typeOfObjectProperty := g.buildTypeOfObjectProperty(string(fieldProto.Desc.Name()))
+			actualProperty := g.namedSchemaForField(fieldProto, schema)
+			if actualProperty == nil {
+				continue
+			}
+
+			*oneofFieldSchema.Value.Properties = append(
+				*oneofFieldSchema.Value.Properties,
+				typeOfObjectProperty,
+				actualProperty,
+			)
+
+			if schema.Value.Definitions == nil {
+				schema.Value.Definitions = &[]*jsonschema.NamedSchema{}
+			}
+			*schema.Value.Definitions = append(*schema.Value.Definitions, oneofFieldSchema)
+
+			definitionsRef := "#/definitions/" + ref
+			*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &definitionsRef})
+		}
+
+		*schema.Value.Properties = append(
+			*schema.Value.Properties,
+			&jsonschema.NamedSchema{
+				Name:  g.formatOneofFieldName(oneOfProto),
+				Value: &oneOfSchema,
+			},
+		)
+	}
+}
+
 // buildSchemasFromMessages creates a schema for each message.
 func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Message) []*jsonschema.NamedSchema {
 	schemas := []*jsonschema.NamedSchema{}
@@ -403,55 +457,7 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 			continue
 		}
 
-		if message.Oneofs != nil {
-			for _, oneOfProto := range message.Oneofs {
-				oneOfSchema := jsonschema.Schema{
-					OneOf: &[]*jsonschema.Schema{},
-				}
-
-				refUnspecified := "TypeUnspecified.json"
-				*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &refUnspecified})
-
-				for _, fieldProto := range oneOfProto.Fields {
-					ref := schemaName + "_" + fieldProto.GoName
-					oneofFieldSchema := &jsonschema.NamedSchema{
-						Name: ref,
-						Value: &jsonschema.Schema{
-							Type:       &jsonschema.StringOrStringArray{String: &typeObject},
-							Title:      &ref,
-							Properties: &[]*jsonschema.NamedSchema{},
-						},
-					}
-					typeOfObjectProperty := g.buildTypeOfObjectProperty(string(fieldProto.Desc.Name()))
-					actualProperty := g.namedSchemaForField(fieldProto, schema)
-					if actualProperty == nil {
-						continue
-					}
-
-					*oneofFieldSchema.Value.Properties = append(
-						*oneofFieldSchema.Value.Properties,
-						typeOfObjectProperty,
-						actualProperty,
-					)
-
-					if schema.Value.Definitions == nil {
-						schema.Value.Definitions = &[]*jsonschema.NamedSchema{}
-					}
-					*schema.Value.Definitions = append(*schema.Value.Definitions, oneofFieldSchema)
-
-					definitionsRef := "#/definitions/" + ref
-					*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &definitionsRef})
-				}
-
-				*schema.Value.Properties = append(
-					*schema.Value.Properties,
-					&jsonschema.NamedSchema{
-						Name:  g.formatOneofFieldName(oneOfProto),
-						Value: &oneOfSchema,
-					},
-				)
-			}
-		}
+		g.addOneofFieldsToSchema(message.Oneofs, schema)
 
 		for _, field := range message.Fields {
 			if field.Oneof != nil {
