@@ -230,7 +230,7 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 				name := string(field.Enum().Values().Get(i).Name())
 				*kindSchema.Enumeration = append(*kindSchema.Enumeration, jsonschema.SchemaEnumValue{String: &name})
 				if i == 0 {
-					kindSchema.Default = &jsonschema.DefaultValue{StringValue: &emptyString}
+					kindSchema.Default = &jsonschema.DefaultValue{StringValue: &name}
 				}
 			}
 		} else {
