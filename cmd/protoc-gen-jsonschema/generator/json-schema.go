@@ -104,10 +104,10 @@ func (g *JSONSchemaGenerator) Run() error {
 
 func (g *JSONSchemaGenerator) generateTypeUnspecified() {
 	unspecifiedSchema := g.setupSchemaForMessage("TypeUnspecified", "")
-	typeOfObjectProperty := g.buildTypeOfObjectProperty("unspecified")
+	kindProperty := g.buildKindProperty("unspecified")
 	*unspecifiedSchema.Value.Properties = append(
 		*unspecifiedSchema.Value.Properties,
-		typeOfObjectProperty,
+		kindProperty,
 	)
 	outputFile := g.plugin.NewGeneratedFile(fmt.Sprintf("%s.json", unspecifiedSchema.Name), "")
 	outputFile.Write([]byte(unspecifiedSchema.Value.JSONString()))
@@ -366,20 +366,20 @@ func (g *JSONSchemaGenerator) setupSchemaForMessage(schemaName string, comments 
 	return schema
 }
 
-func (g *JSONSchemaGenerator) buildTypeOfObjectProperty(propertyValue string) *jsonschema.NamedSchema {
-	typeOfObjectProperty := &jsonschema.NamedSchema{
-		Name: "typeOfObject",
+func (g *JSONSchemaGenerator) buildKindProperty(propertyValue string) *jsonschema.NamedSchema {
+	kindProperty := &jsonschema.NamedSchema{
+		Name: "kind",
 		Value: &jsonschema.Schema{
 			Type:        &jsonschema.StringOrStringArray{String: &typeString},
 			Enumeration: &[]jsonschema.SchemaEnumValue{},
 			Default:     &jsonschema.DefaultValue{StringValue: &propertyValue},
 		},
 	}
-	*typeOfObjectProperty.Value.Enumeration = append(
-		*typeOfObjectProperty.Value.Enumeration,
+	*kindProperty.Value.Enumeration = append(
+		*kindProperty.Value.Enumeration,
 		jsonschema.SchemaEnumValue{String: &propertyValue},
 	)
-	return typeOfObjectProperty
+	return kindProperty
 }
 
 func (g *JSONSchemaGenerator) addOneofFieldsToSchema(oneofs []*protogen.Oneof, schema *jsonschema.NamedSchema) {
@@ -405,7 +405,7 @@ func (g *JSONSchemaGenerator) addOneofFieldsToSchema(oneofs []*protogen.Oneof, s
 					Properties: &[]*jsonschema.NamedSchema{},
 				},
 			}
-			typeOfObjectProperty := g.buildTypeOfObjectProperty(string(fieldProto.Desc.Name()))
+			kindProperty := g.buildKindProperty(string(fieldProto.Desc.Name()))
 			actualProperty := g.namedSchemaForField(fieldProto, schema)
 			if actualProperty == nil {
 				continue
@@ -413,7 +413,7 @@ func (g *JSONSchemaGenerator) addOneofFieldsToSchema(oneofs []*protogen.Oneof, s
 
 			*oneofFieldSchema.Value.Properties = append(
 				*oneofFieldSchema.Value.Properties,
-				typeOfObjectProperty,
+				kindProperty,
 				actualProperty,
 			)
 
