@@ -325,7 +325,7 @@ func (g *JSONSchemaGenerator) namedSchemaForField(field *protogen.Field, schema 
 	}
 
 	fieldName := "value"
-	if isValueProp {
+	if !isValueProp {
 		fieldName = g.formatFieldName(field)
 	}
 
