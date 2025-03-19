@@ -296,7 +296,7 @@ func (g *JSONSchemaGenerator) schemaOrReferenceForField(field protoreflect.Field
 	return kindSchema
 }
 
-func (g *JSONSchemaGenerator) namedSchemaForField(field *protogen.Field, schema *jsonschema.NamedSchema) *jsonschema.NamedSchema {
+func (g *JSONSchemaGenerator) namedSchemaForField(field *protogen.Field, schema *jsonschema.NamedSchema, isValueProp bool) *jsonschema.NamedSchema {
 	// The field is either described by a reference or a schema.
 	fieldSchema := g.schemaOrReferenceForField(field.Desc, schema.Value.Definitions)
 	if fieldSchema == nil {
@@ -324,7 +324,11 @@ func (g *JSONSchemaGenerator) namedSchemaForField(field *protogen.Field, schema 
 		}
 	}
 
-	fieldName := g.formatFieldName(field)
+	fieldName := "value"
+	if isValueProp {
+		fieldName = g.formatFieldName(field)
+	}
+
 	// Do not add title for ref values
 	if fieldSchema.Ref == nil {
 		fieldSchema.Title = &fieldName
@@ -406,7 +410,7 @@ func (g *JSONSchemaGenerator) addOneofFieldsToSchema(oneofs []*protogen.Oneof, s
 				},
 			}
 			kindProperty := g.buildKindProperty(string(fieldProto.Desc.Name()))
-			actualProperty := g.namedSchemaForField(fieldProto, schema)
+			actualProperty := g.namedSchemaForField(fieldProto, schema, true)
 			if actualProperty == nil {
 				continue
 			}
@@ -464,7 +468,7 @@ func (g *JSONSchemaGenerator) buildSchemasFromMessages(messages []*protogen.Mess
 				continue
 			}
 
-			namedSchema := g.namedSchemaForField(field, schema)
+			namedSchema := g.namedSchemaForField(field, schema, false)
 			if namedSchema == nil {
 				continue
 			}
