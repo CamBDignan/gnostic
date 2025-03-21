@@ -409,7 +409,8 @@ func (g *JSONSchemaGenerator) addOneofFieldsToSchema(oneofs []*protogen.Oneof, s
 					Properties: &[]*jsonschema.NamedSchema{},
 				},
 			}
-			kindProperty := g.buildKindProperty(string(fieldProto.Desc.Name()))
+			kindPropertyValue := "type_" + string(fieldProto.Desc.Name())
+			kindProperty := g.buildKindProperty(kindPropertyValue)
 			actualProperty := g.namedSchemaForField(fieldProto, schema, true)
 			if actualProperty == nil {
 				continue
