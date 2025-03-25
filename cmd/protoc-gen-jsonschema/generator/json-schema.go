@@ -359,9 +359,11 @@ func (g *JSONSchemaGenerator) setupSchemaForMessage(schemaName string, comments 
 }
 
 func (g *JSONSchemaGenerator) buildKindProperty(propertyValue string) *jsonschema.NamedSchema {
+	kind := "kind"
 	kindProperty := &jsonschema.NamedSchema{
-		Name: "kind",
+		Name: kind,
 		Value: &jsonschema.Schema{
+			Title:       &kind,
 			Type:        &jsonschema.StringOrStringArray{String: &typeString},
 			Enumeration: &[]jsonschema.SchemaEnumValue{},
 			Default:     &jsonschema.DefaultValue{StringValue: &propertyValue},
