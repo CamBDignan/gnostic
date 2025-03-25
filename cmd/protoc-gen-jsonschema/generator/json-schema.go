@@ -37,6 +37,7 @@ var (
 	typeBoolean = "boolean"
 	typeObject  = "object"
 	typeArray   = "array"
+	typeNull    = "null"
 
 	formatDate     = "date"
 	formatDateTime = "date-time"
@@ -97,20 +98,7 @@ func (g *JSONSchemaGenerator) Run() error {
 		}
 	}
 
-	g.generateTypeUnspecified()
-
 	return nil
-}
-
-func (g *JSONSchemaGenerator) generateTypeUnspecified() {
-	unspecifiedSchema := g.setupSchemaForMessage("TypeUnspecified", "")
-	kindProperty := g.buildKindProperty("unspecified")
-	*unspecifiedSchema.Value.Properties = append(
-		*unspecifiedSchema.Value.Properties,
-		kindProperty,
-	)
-	outputFile := g.plugin.NewGeneratedFile(fmt.Sprintf("%s.json", unspecifiedSchema.Name), "")
-	outputFile.Write([]byte(unspecifiedSchema.Value.JSONString()))
 }
 
 // filterCommentString removes line breaks and linter rules from comments.
@@ -393,11 +381,11 @@ func (g *JSONSchemaGenerator) addOneofFieldsToSchema(oneofs []*protogen.Oneof, s
 
 	for _, oneOfProto := range oneofs {
 		oneOfSchema := jsonschema.Schema{
-			OneOf: &[]*jsonschema.Schema{},
+			OneOf:   &[]*jsonschema.Schema{},
+			Default: &jsonschema.DefaultValue{NullTag: true},
 		}
 
-		refUnspecified := "TypeUnspecified.json"
-		*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Ref: &refUnspecified})
+		*oneOfSchema.OneOf = append(*oneOfSchema.OneOf, &jsonschema.Schema{Type: &jsonschema.StringOrStringArray{String: &typeNull}})
 
 		for _, fieldProto := range oneOfProto.Fields {
 			ref := schema.Name + "_" + fieldProto.GoName
