@@ -261,6 +261,8 @@ func (schema *Schema) defaultValue(v *yaml.Node) *DefaultValue {
 		case "!!bool":
 			v2, _ := strconv.ParseBool(v.Value)
 			return &DefaultValue{BooleanValue: &v2}
+		case "!!null":
+			return &DefaultValue{NullTag: true}
 		default:
 			return &DefaultValue{StringValue: &v.Value}
 		}

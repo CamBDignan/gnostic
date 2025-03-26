@@ -235,4 +235,5 @@ type DefaultValue struct {
 	Int64Value   *int64
 	Float64Value *float64
 	ArrayValue   []*yaml.Node
+	NullTag      bool
 }
