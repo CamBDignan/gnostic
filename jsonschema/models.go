@@ -70,7 +70,7 @@ type Schema struct {
 	// 6.  Metadata keywords
 	Title       *string
 	Description *string
-	Default     *yaml.Node
+	Default     *DefaultValue
 
 	// 7.  Semantic validation with "format"
 	Format *string
@@ -227,4 +227,12 @@ func (s *Schema) DefinitionWithName(name string) *Schema {
 // AddProperty adds a named property.
 func (s *Schema) AddProperty(name string, property *Schema) {
 	*s.Properties = append(*s.Properties, NewNamedSchema(name, property))
+}
+
+type DefaultValue struct {
+	StringValue  *string
+	BooleanValue *bool
+	Int64Value   *int64
+	Float64Value *float64
+	ArrayValue   []*yaml.Node
 }
